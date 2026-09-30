@@ -385,7 +385,7 @@ function buildDryCreek() {
   for (let x = 120; x < LW; x += 380) if (!((x > 1700 && x < 5300) || (x > 1460 && x < 1660))) poles.push(x);
   [[-400, 1480], [1640, 5300], [5420, LW + 400]].forEach(([a, b]) => S(a, GY, b - a, 400, 'ground'));
   // Outskirts
-  signs.push({ x: 150, text: () => pad.gp ? 'Stick to walk  ·  Cross to jump, again to roll  ·  Down to duck' : 'A / D to walk  ·  Space to jump, again to roll  ·  S to duck' });
+  signs.push({ x: 150, text: () => pad.gp ? ['Stick to walk  ·  Down to duck', 'Cross to jump, again to roll'] : ['A / D to walk  ·  S to duck', 'Space to jump, again to roll'] });
   S(430, GY - 36, 90, 36, 'rock');
   signs.push({ x: 610, text: () => [settings.aim === 'mouse'
     ? (pad.gp && aimSrc === 'pad' ? 'Right stick aims  ·  R2 or Circle shoots  ·  L1 reloads' : 'Mouse aims  ·  click to shoot  ·  R reload')
@@ -2751,8 +2751,9 @@ function drawSign(s) {
     }, DRESS_PAL);
     const g = c.getContext('2d'); lines.forEach((l, i) => text(g, l, PM + tw / 2, PM + 6 + i * 10, { align: 'center', col: '#F4E2BC', shadow: '#1A0C06' }));
     c.th = th; c.tw = tw; if (DRESS.size > 200) DRESS.clear(); DRESS.set(key, c); }
-  dith(ctx, Math.round(s.x - c.tw / 2) + 4, GY - 1, c.tw, 3, '#2A1408', 0.5);
-  ctx.drawImage(c, Math.round(s.x - c.tw / 2) - PM, GY - 58 - c.th - PM);
+  const sx = Math.max(6, Math.round(s.x - c.tw / 2));                       // never hangs off the start of the level
+  dith(ctx, sx + 4, GY - 1, c.tw, 3, '#2A1408', 0.5);
+  ctx.drawImage(c, sx - PM, GY - 58 - c.th - PM);
 }
 // the checkpoint: a lantern on a post that lights up when you reach it
 function drawCheckpoint(c) {
