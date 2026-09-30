@@ -13,6 +13,16 @@ Shots fly dead straight the way you're facing, Contra style.
 
 **Pause** (P, Esc or Options) shows the controls and a few tips.
 
+### Scoreboard
+Finished runs go on one board shared by everyone who plays, ranked by time. Pauses don't count, and fewer deaths break a tie.
+- **Riding out:** when you win, the game asks for your name, up to 12 letters or numbers:
+  - **Keyboard:** type it, **Enter** saves, **Esc** skips.
+  - **Controller:** the **D-pad** picks letters, **Cross** saves, **Circle** deletes.
+  - It then shows the top ten with your run lit in gold, and your place if you didn't make the ten.
+- **Viewing the board:** **L** (Square) on the title screen.
+- **Offline:** you can still play and finish, but your time isn't saved.
+- **Where scores live:** a Supabase table that anyone can read and add to, but no one can edit or delete. Runs under 45 seconds are refused.
+
 ### Controls
 | Action | Keyboard / mouse | PS5 controller |
 |---|---|---|

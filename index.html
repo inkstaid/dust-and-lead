@@ -670,7 +670,7 @@ function playerChecks(p) {
   // horse
   const horse = decor.find(d => d.kind === 'horse');
   if (horse && Math.abs(p.x + p.w / 2 - horse.x) < 50 && Math.abs(p.y + p.h - horse.y) < 12) {
-    if (bossDead || !boss) { state = 'win'; stateT = 0; stats.end = time; sfx.win(); }
+    if (bossDead || !boss) { state = 'win'; stateT = 0; stats.end = time; sfx.win(); winStart(); }
     else if (msg.t <= 0) showMsg('Not yet', LV.notYet, 2);
   }
 }
@@ -988,11 +988,13 @@ function update(rdt) {
     camX = 40 + (1 + Math.sin(time * 0.05)) * 250; camY = CAM_BOT;
     updateWeeds(rdt); updateParts(rdt);
     if (pressed.h || padHit(3)) { state = 'sheet'; return; }
+    if (pressed.l || padHit(2)) { openBoard(); return; }
     if (inp.confirm) { initAudio(); cpIndex = -1; startRun(-1); }
     return;
   }
   if (state === 'sheet') { if (pressed.h || padHit(3) || padHit(1) || inp.pause || inp.confirm) state = 'title'; return; }
-  if (state === 'pause') { if (inp.pause || inp.confirm) state = 'play'; return; }
+  if (state === 'board') { if (stateT > 0.2 && (pressed.l || padHit(2) || padHit(1) || inp.pause || inp.confirm || pressed.escape)) state = 'title'; return; }
+  if (state === 'pause') { if (stats) stats.paused = (stats.paused || 0) + rdt; if (inp.pause || inp.confirm) state = 'play'; return; }
   if (state === 'play' && inp.pause) { state = 'pause'; return; }
 
   const targetTS = state === 'dead' ? 0.3 : 1; // the world slows as you fall
@@ -1021,7 +1023,7 @@ function update(rdt) {
   camX = lerp(camX, tx, 1 - Math.exp(-rdt * 6)); camY = lerp(camY, ty, 1 - Math.exp(-rdt * 4));
 
   if (state === 'dead' && (stateT > 2.2 || stateT > 0.8 && (inp.confirm || pressed.r))) startRun(cpIndex); // quick respawn
-  if (state === 'win' && stateT > 2 && inp.confirm) { buildLevel(); state = 'title'; }
+  if (state === 'win') winUpdate(inp);
 }
 
 // =====================================================================================================
@@ -3140,6 +3142,7 @@ function render() {
   ctx = pctx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.imageSmoothingEnabled = false;
   if (!REV_G) { REV_G = parsePart(REV_ICON); SG_G = parsePart(SG_ICON); }
   if (state === 'sheet') { renderSheet(); present(); return; }
+  if (state === 'board') { renderBoard(); present(); return; }
   const shx = Math.round((Math.random() - 0.5) * shake * 0.7), shy = Math.round((Math.random() - 0.5) * shake * 0.7);
   const cx = Math.round(camX) + shx, cy = Math.round(camY) + shy, vis = (x, w, m = 60) => x + w > cx - m && x < cx + PW + m;
   drawBackground(Math.round(camX), Math.round(camY));
@@ -3185,7 +3188,7 @@ function render() {
     drawHUDShapes(); if (state !== 'pause') drawMessages();
     if (state === 'pause') drawPause();
     if (state === 'dead') drawDead();
-    if (state === 'win') drawWin();
+    if (state === 'win') drawWinBoard();
   }
   drawCrosshair();
   if (state === 'play' && stateT < 0.45) ditherFade(1 - stateT / 0.45);
@@ -3238,7 +3241,128 @@ const TITLE = { img: null, ready: false };
 if (typeof Image !== 'undefined') { const im = new Image(); im.onload = () => { TITLE.ready = true; }; im.src = TITLE_PNG; TITLE.img = im; }
 function drawTitleArt() {
   ctx.drawImage(TITLE.img, 0, 0);
+  let x = PW - 96; x = drawButtons(x, PH - 12, 'k:L'); text(ctx, 'SCOREBOARD', x + 1, PH - 15, { col: '#F6E8C8', outline: INK });   // the shared board
   for (const [x, y, s] of [[58, 186, 0]]) glow(ctx, x, y, 20, '255,180,90', 0.22 + Math.sin(time * 9 + s) * 0.05 + Math.sin(time * 23 + s * 3) * 0.03);
+}
+
+// ---------- the scoreboard ----------
+// Finished runs go on one board shared by everyone who plays: ranked by time (pauses don't count), fewer deaths
+// breaking a tie. When you ride out, the game asks for your name, saves the run and shows the top ten with yours lit.
+// L (Square on a pad) on the title screen shows the board. Scores live in a Supabase table; the key below is the
+// publishable one, made to sit in a web page: the table only lets anyone read and add rows, never change them.
+const SB = { url: 'https://eliiodfaitssuykezogs.supabase.co/rest/v1/scores', key: 'sb_publishable_H0u7JY-BVzH1uewUbbScvw_lsc2U2BJ' };
+const SB_ON = typeof fetch !== 'undefined' && typeof location !== 'undefined';             // off in the test harness
+const NAME_CH = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-';
+let WB = null, BOARD = { rows: null, err: false };
+const fmtTime = ms => { const s = ms / 1000, m = Math.floor(s / 60), r = s - m * 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1); };
+const runMs = () => Math.round(((stats.end || time) - stats.start - (stats.paused || 0)) * 1000);
+async function sbTop() {
+  const r = await fetch(SB.url + '?select=id,name,time_ms,deaths&order=time_ms.asc,deaths.asc,created_at.asc&limit=10', { headers: { apikey: SB.key } });
+  if (!r.ok) throw new Error('board ' + r.status); return r.json();
+}
+async function sbPost(name, ms, deaths) {
+  const r = await fetch(SB.url, { method: 'POST', headers: { apikey: SB.key, 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name, time_ms: ms, deaths }) });
+  if (!r.ok) throw new Error('save ' + r.status); return (await r.json())[0];
+}
+async function sbRank(ms, deaths) { // how many runs beat this one
+  const r = await fetch(SB.url + `?select=id&or=(time_ms.lt.${ms},and(time_ms.eq.${ms},deaths.lt.${deaths}))`, { headers: { apikey: SB.key, Prefer: 'count=exact', 'Range-Unit': 'items', Range: '0-0' } });
+  const n = +((r.headers.get('content-range') || '').split('/')[1]); return isFinite(n) ? n + 1 : null;
+}
+function loadBoard() { BOARD = { rows: null, err: false }; if (!SB_ON) { BOARD.err = true; return; } sbTop().then(rows => { BOARD.rows = rows; }).catch(() => { BOARD.err = true; }); }
+function openBoard() { state = 'board'; stateT = 0; loadBoard(); }
+
+// --- riding out: name entry, saving, the board ---
+function winStart() {
+  let name = ''; try { name = localStorage.getItem('dustlead.name') || ''; } catch (e) {}
+  WB = { phase: SB_ON ? 'name' : 'offline', name: name.slice(0, 12), ms: runMs(), deaths: stats.deaths, myId: null, rank: null, slot: Math.max(0, name.length - 1) };
+  loadBoard();
+}
+function submitName() {
+  const name = WB.name.trim().replace(/\s+/g, ' ');
+  if (!name) return;
+  try { localStorage.setItem('dustlead.name', name); } catch (e) {}
+  if (WB.ms < 45000) { WB.phase = 'error'; WB.msg = 'That run was too quick to count'; return; }
+  WB.phase = 'saving';
+  sbPost(name, WB.ms, WB.deaths).then(row => { WB.myId = row && row.id; return Promise.all([sbTop(), sbRank(WB.ms, WB.deaths)]); })
+    .then(([rows, rank]) => { BOARD = { rows, err: false }; WB.rank = rank; WB.phase = 'done'; })
+    .catch(() => { WB.phase = 'error'; WB.msg = 'Couldn’t reach the scoreboard'; });
+}
+addEventListener('keydown', e => { // typing a name
+  if (state !== 'win' || !WB || WB.phase !== 'name' || stateT < 1) return;
+  const k = e.key;
+  if (k === 'Backspace') { WB.name = WB.name.slice(0, -1); e.preventDefault && e.preventDefault(); }
+  else if (k.length === 1) { const c = k.toUpperCase(); if (NAME_CH.includes(c) && WB.name.length < 12 && !(c === ' ' && !WB.name)) WB.name += c; }
+});
+function winUpdate(inp) {
+  if (!WB) winStart();
+  if (WB.phase === 'name' && stateT > 1) {
+    if (pressed.enter || padHit(0)) submitName();
+    else if (pressed.escape || padHit(9)) WB.phase = 'skipped';
+    // on a pad: up/down pick the letter under the cursor, left/right move along, Circle deletes
+    if (padHit(12) || padHit(13)) { if (!WB.name.length) WB.name = 'A'; else { const i = NAME_CH.indexOf(WB.name[WB.slot]) + (padHit(12) ? 1 : -1); WB.name = WB.name.slice(0, WB.slot) + NAME_CH[(i + NAME_CH.length) % NAME_CH.length] + WB.name.slice(WB.slot + 1); } }
+    if (padHit(15) && WB.name.length < 12) { WB.slot = WB.name.length; WB.name += 'A'; }
+    if (padHit(14) || padHit(1)) { WB.name = WB.name.slice(0, -1); WB.slot = Math.max(0, WB.name.length - 1); }
+    return;
+  }
+  if ((WB.phase === 'done' || WB.phase === 'error' || WB.phase === 'skipped' || WB.phase === 'offline') && stateT > 2 && (inp.confirm || pressed.escape)) { WB = null; buildLevel(); state = 'title'; }
+}
+// the board itself: rank, name, time, deaths; your run in gold (and below the ten if it didn't make it)
+function drawBoardTable(x, y, w, mine) {
+  const rows = BOARD.rows;
+  text(ctx, 'FASTEST RIDERS', x + w / 2, y, { align: 'center', font: 'b', col: '#F4C85A', outline: INK });
+  text(ctx, 'RANK', x + 6, y + 18, { col: 'rgba(234,217,184,0.5)' }); text(ctx, 'NAME', x + 40, y + 18, { col: 'rgba(234,217,184,0.5)' });
+  text(ctx, 'TIME', x + w - 56, y + 18, { align: 'right', col: 'rgba(234,217,184,0.5)' }); text(ctx, 'DEATHS', x + w - 6, y + 18, { align: 'right', col: 'rgba(234,217,184,0.5)' });
+  Rc(ctx, x, y + 28, w, 1, 'rgba(234,217,184,0.15)');
+  if (!rows) { text(ctx, BOARD.err ? 'The scoreboard is out of reach' : 'Riding for the scores' + '...'.slice(0, 1 + Math.floor(time * 3) % 3), x + w / 2, y + 60, { align: 'center', col: '#EAD9B8' }); return; }
+  if (!rows.length) { text(ctx, 'No one has ridden out yet. Be the first.', x + w / 2, y + 60, { align: 'center', col: '#EAD9B8' }); return; }
+  let shown = false;
+  rows.forEach((r, i) => { const yy = y + 34 + i * 13, me = mine && r.id === mine; if (me) { shown = true; Rc(ctx, x, yy - 2, w, 12, 'rgba(244,200,90,0.16)'); }
+    const col = me ? '#FFE08A' : i === 0 ? '#F6E8C8' : '#EAD9B8';
+    text(ctx, String(i + 1), x + 16, yy, { align: 'right', col }); text(ctx, r.name, x + 40, yy, { col });
+    text(ctx, fmtTime(r.time_ms), x + w - 56, yy, { align: 'right', col }); text(ctx, String(r.deaths), x + w - 6, yy, { align: 'right', col }); });
+  if (mine && !shown && WB && WB.rank) { const yy = y + 34 + rows.length * 13 + 4; Rc(ctx, x, yy - 2, w, 12, 'rgba(244,200,90,0.16)');
+    text(ctx, String(WB.rank), x + 16, yy, { align: 'right', col: '#FFE08A' }); text(ctx, WB.name.trim(), x + 40, yy, { col: '#FFE08A' });
+    text(ctx, fmtTime(WB.ms), x + w - 56, yy, { align: 'right', col: '#FFE08A' }); text(ctx, String(WB.deaths), x + w - 6, yy, { align: 'right', col: '#FFE08A' }); }
+}
+function drawWinBoard() {
+  if (!WB) winStart();
+  const a = clamp(stateT / 1.2, 0, 1); shade(0.7 * a); ctx.globalAlpha = a;
+  text(ctx, LV.win[0], PW / 2, 44, { align: 'center', col: '#F4C85A' }); bigText(LV.win[1], PW / 2, 56, 2, GOLD);
+  // your run
+  const acc = stats.shots ? Math.round(stats.hits / stats.shots * 100) : 0, lx = 36, ly = 104;
+  framePanel(lx, ly, 196, 150);
+  text(ctx, 'YOUR RUN', lx + 98, ly + 10, { align: 'center', font: 'b', col: '#F4C85A', outline: INK });
+  [['Time', fmtTime(WB.ms)], ['Outlaws killed', stats.kills], ['Headshots', stats.heads], ['Accuracy', acc + '%'], ['Deaths', stats.deaths], ['Cash', '$' + cash.toFixed(2)]]
+    .forEach(([k, v], i) => { const y = ly + 34 + i * 18; text(ctx, k, lx + 16, y, { col: 'rgba(234,217,184,0.7)' }); text(ctx, String(v), lx + 180, y - 1, { align: 'right', font: 'b', col: '#FFF4DC' }); });
+  // the board, or your name for it
+  const rx = 248, ry = 104, rw = 356; framePanel(rx, ry, rw, 196);
+  if (WB.phase === 'name' || WB.phase === 'saving') {
+    text(ctx, 'PUT YOUR NAME ON THE BOARD', rx + rw / 2, ry + 12, { align: 'center', font: 'b', col: '#F4C85A', outline: INK });
+    const fw = 12 * 9 + 16, fx = Math.round(rx + rw / 2 - fw / 2), fy = ry + 40;
+    Rc(ctx, fx, fy, fw, 22, INK); Rc(ctx, fx + 1, fy + 1, fw - 2, 20, '#241A1E');
+    for (let i = 0; i < 12; i++) { const cx = fx + 8 + i * 9; Rc(ctx, cx, fy + 17, 7, 1, i < WB.name.length ? 'rgba(234,217,184,0.25)' : 'rgba(234,217,184,0.12)'); if (WB.name[i] && WB.name[i] !== ' ') text(ctx, WB.name[i], cx + 3, fy + 8, { align: 'center', font: 'b', col: '#FFF4DC' }); }
+    if (WB.phase === 'name' && Math.floor(time * 2.5) % 2 === 0) { const cx = fx + 8 + Math.min(11, WB.name.length) * 9; Rc(ctx, cx, fy + 5, 7, 11, 'rgba(244,200,90,0.5)'); }
+    if (WB.phase === 'saving') text(ctx, 'Saving your run' + '...'.slice(0, 1 + Math.floor(time * 3) % 3), rx + rw / 2, fy + 34, { align: 'center', col: '#EAD9B8' });
+    else { text(ctx, 'Type your name  (letters, numbers, up to 12)', rx + rw / 2, fy + 32, { align: 'center', col: 'rgba(234,217,184,0.7)' });
+      let x = rx + 40; x = drawButtons(x, fy + 60, 'k:ENTER'); text(ctx, 'save', x + 2, fy + 57, { col: '#EAD9B8' }); x += 40; x = drawButtons(x, fy + 60, 'k:ESC'); text(ctx, 'skip', x + 2, fy + 57, { col: '#EAD9B8' });
+      x = rx + 40; x = drawButtons(x, fy + 82, 'dp:down'); text(ctx, 'letter', x + 2, fy + 79, { col: '#EAD9B8' }); x += 50; x = drawButtons(x, fy + 82, 'b:cross'); text(ctx, 'save', x + 2, fy + 79, { col: '#EAD9B8' }); x += 40; x = drawButtons(x, fy + 82, 'b:circle'); text(ctx, 'delete', x + 2, fy + 79, { col: '#EAD9B8' }); }
+  } else {
+    drawBoardTable(rx + 16, ry + 10, rw - 32, WB.phase === 'done' ? WB.myId : null);
+    if (WB.phase === 'done' && WB.rank) text(ctx, 'You placed ' + WB.rank + (WB.rank === 1 ? '. Fastest in the territory!' : '.'), rx + rw / 2, ry + 180, { align: 'center', col: '#FFE08A' });
+    if (WB.phase === 'error') text(ctx, WB.msg, rx + rw / 2, ry + 180, { align: 'center', col: '#F07474' });
+    if (WB.phase === 'offline') text(ctx, 'Play online to put your time on the board', rx + rw / 2, ry + 180, { align: 'center', col: 'rgba(234,217,184,0.7)' });
+  }
+  if (WB.phase !== 'name' && WB.phase !== 'saving' && stateT > 2) text(ctx, pad.gp ? 'THE END  ·  CROSS FOR THE TITLE SCREEN' : 'THE END  ·  SPACE OR CLICK FOR THE TITLE SCREEN', PW / 2, 320, { align: 'center', font: 'b', col: '#F4C85A', outline: INK });
+  ctx.globalAlpha = 1;
+}
+// the board from the title screen
+function renderBoard() {
+  ctx = pctx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  if (TITLE.ready) ctx.drawImage(TITLE.img, 0, 0); else Rc(ctx, 0, 0, PW, PH, '#1A1216');
+  shade(0.72);
+  const w = 380, x = PW / 2 - w / 2, y = 48; framePanel(x, y, w, 250);
+  drawBoardTable(x + 18, y + 14, w - 36, null);
+  let bx = PW / 2 - 70; bx = drawButtons(bx, y + 234, 'k:L'); bx = drawButtons(bx + 2, y + 234, 'b:square'); text(ctx, 'or', bx, y + 231, { col: '#EAD9B8' }); bx = drawButtons(bx + 12, y + 234, 'k:ESC'); text(ctx, 'to go back', bx + 2, y + 231, { col: '#EAD9B8' });
 }
 
 // ---------- loop ----------
