@@ -7,7 +7,7 @@ A 2D Wild West platformer prototype. In Dry Creek, 1899, the Crowe Boys took you
 ## Play
 Open `index.html` in Chrome or Safari. No install needed. (Firefox works with a keyboard, but its PS5 controller support on macOS is unreliable.)
 
-The title screen is just the logo and "Press Space to ride" (Cross on a PS5 controller). **H** (Triangle) there opens the character sheet.
+The title screen is a painted scene: Dry Creek station at sundown with the logo. Press Space (Cross on a PS5 controller) to start. **H** (Triangle) there opens the character sheet.
 
 Shots fly dead straight the way you're facing, Contra style.
 
