@@ -7,7 +7,7 @@ A 2D Wild West platformer prototype. In Dry Creek, 1899, the Crowe Boys took you
 ## Play
 Open `index.html` in Chrome or Safari. No install needed. (Firefox works with a keyboard, but its PS5 controller support on macOS is unreliable.)
 
-The title screen is a painted scene: Dry Creek station at sundown with the logo. Press Space (Cross on a PS5 controller) to start. **H** (Triangle) there opens the character sheet.
+The title screen is a painted scene: Dry Creek station at sundown with the logo. The cowboy on it twirls his revolver, reloads his shotgun and cleans his knife in turn. Press Space (Cross on a PS5 controller) to start. **H** (Triangle) there opens the character sheet.
 
 Shots fly dead straight the way you're facing, Contra style.
 
@@ -28,7 +28,6 @@ Finished runs go on one board shared by everyone who plays, ranked by time. Paus
 |---|---|---|
 | Walk | A / D or ←/→ | Left stick or D-pad |
 | Jump | Space, W or ↑ | Cross |
-| Double jump (with a forward roll) | Jump again in the air | Cross again in the air |
 | Duck | S or ↓ | Left stick down or D-pad down |
 | Drop through a plank or awning | S + Space | Down + Cross |
 | Revolver | X or left click | R2 or Circle |
@@ -39,7 +38,8 @@ Finished runs go on one board shared by everyone who plays, ranked by time. Paus
 | Pause | P or Esc | Options |
 | Music on/off | N | Create |
 
-- **Double jump:** press jump again in mid-air for a second, slightly smaller jump (82% of the first), once per jump. It resets when you land, and you still get it after walking off a ledge. The hero tucks into a forward somersault through it. A plain jump rises about 138 px, and a jump plus double jump about 230 px.
+- **Idle routines:** stand still for a few seconds and Jack puts on the same show as the cowboy on the title screen, one after another: he draws the revolver, twirls it and spins it home; pulls the shotgun off his back, breaks it, loads two shells from his belt and slings it again; draws the knife, wipes the blade with a rag, turns it to the light, flips it and sheathes it. Any input ends it at once.
+- **Reloading:** Jack loads the way the Crowe Boys do: a filling ring of six rounds (or two shells for the shotgun) and "RELOADING" over his head. He holds the revolver low and watches it, and keeps his feet.
 - **Ducking** is about timing. Duck when an outlaw's gun flashes and his shot sails over you. Stay down, though, and he adjusts his aim low after a moment (quickest for Silas). Riflemen above you always aim at your body.
 
 ### The Crowe Boys fight back
@@ -75,10 +75,9 @@ Jack Rourke is a gunslinger with a readable silhouette.
 - Dark trousers, worn boots and dark gloves.
 
 When you haven't fired for a moment, the revolver goes back in the holster and its grip shows at his hip. His poses are:
-- idle (breathing)
+- idle (breathing), and the three idle routines: revolver twirl, shotgun reload, knife cleaning
 - an 8-frame run
 - jump (the leading knee drives up, the coat trails) and fall (legs reaching for the ground, the coat lifting)
-- double-jump roll: tucked tight, knees to chest, a full forward somersault in 16 steps, turning about his middle. Fire mid-roll and he snaps into the aim pose
 - aiming (the renderer handles any angle, for the Crowe Boys)
 - kneel and shoot
 - run and gun
@@ -167,8 +166,8 @@ The art direction follows how commercial pixel-art games are built ([resolution 
 - **HUD:** one dark strip across the top:
   - **Left:** the portrait, name and hearts, then the knife, the revolver (a cylinder of rounds with loaded / spare) and the shotgun. The weapon in your hand gets a gold underline.
   - **Right:** cash.
-  - **Portrait:** the same man as the sprite (hat, stubble, neckerchief, duster collar), against the sunset.
-  - **Portrait health cue:** the frame goes from steel to tarnished bronze to throbbing red. The face picks up a bruise and a cut, then a swollen, closing eye, blood from the brow and mouth, a torn neckerchief and blood on the shirt. It's driven by the same hearts as the health bar.
+  - **Portrait:** a painted bust of Jack in three states (fine, hurt, badly wounded), resampled onto a clean 42-pixel grid. It hangs just below the HUD strip like a badge.
+  - **Portrait health cue:** the frame goes from steel to tarnished bronze to throbbing red, and the painting changes: a cut on the cheek, then blood down his face and on his kerchief.
 - **Soundtrack:** a spaghetti-western score synthesized in the browser: nylon guitar, whistle, harmonica and hoofbeats, and a faster boss version. Everything is drawn in code and all sound is made in code.
 - **From The Messenger:** snappy movement, hit-stop on big hits, and a quick respawn.
 
