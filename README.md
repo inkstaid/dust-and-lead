@@ -1,5 +1,7 @@
 # Dust & Lead
 
+**Play it in your browser: https://inkstaid.github.io/dust-and-lead/**
+
 A 2D Wild West platformer prototype. In Dry Creek, 1899, the Crowe Boys took your horse and you go get her back.
 
 ## Play
