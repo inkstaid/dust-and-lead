@@ -2208,6 +2208,7 @@ function drawBackground(cx, cy) {
   const skyY = hy - SKY_HOR; if (skyY > 0) Rc(ctx, 0, 0, PW, skyY, '#244256');
   ctx.drawImage(B.sky, -Math.round(cx * 0.02) % 170, skyY);
   tiled(B.cloud, -(cx * 0.03 + time * 1.5), hy - 250 + Math.round(dv * 0.1));
+  drawUfo(hy);                                                                         // now and then, when you're up on a roof
   // rocks left of the sun are lit from the right, rocks right of it from the left
   const sunX = SUN.x - (Math.round(cx * 0.02) % 170), split = (pair, x, y) => {
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, sunX, PH); ctx.clip(); tiled(pair[0], x, y); ctx.restore();
@@ -2975,6 +2976,46 @@ function drawExtras(cx) {
     Rc(ctx, x, GY - 2, 1, 1, '#E0D8C8'); Rc(ctx, x, GY - 1, 1, 1, '#8A8898'); Rc(ctx, x, GY, 1, 1, '#3C3844'); }
 }
 
+// ---------- an easter egg: a flying saucer, far off over the mesas ----------
+// Climb onto a roof and, every so often, a little saucer drifts across the evening sky behind the mesas, stops to hover
+// and shine a light down on the desert, then zips away. The first time you're up on a roof it comes soon; after that it
+// keeps you waiting. Drawn in the sky layer, so the far mesas pass in front of it.
+const UFO = { t: -1, wait: -1, cd: 0, seen: false, last: 0, dir: 1, y0: 0 };
+const UFO_ROWS = ['....ccc....', '...cCCcc...', '.kmMMMMMmk.', 'kmmmmmmmmmk', '.kLkLkLkLk.', '...kkkkk...'];
+const UFO_PAL = { c: '#6EC8D4', C: '#D8FAFF', M: '#C8CCD8', m: '#8A90A0', k: '#2A2C38' }, UFO_LIGHTS = ['#FF5A5A', '#FFE26A', '#7AF0A0'];
+function onRoof(p) {
+  if (!p || !p.onGround) return false; const fy = p.y + p.h;
+  for (const o of oneways) if (o.kind === 'roof' && Math.abs(fy - o.y) < 2 && p.x + p.w > o.x && p.x < o.x + o.w) return true;
+  return false;
+}
+function drawSaucer(x, y, blink) {
+  x = Math.round(x); y = Math.round(y); let li = 0;
+  UFO_ROWS.forEach((row, r) => { for (let i = 0; i < row.length; i++) { const ch = row[i]; if (ch === '.') continue;
+    Rc(ctx, x + i - 5, y + r - 3, 1, 1, ch === 'L' ? UFO_LIGHTS[(li++ + blink) % 3] : UFO_PAL[ch]); } });
+}
+function drawUfo(hy) {
+  const dt = Math.min(0.05, Math.max(0, time - UFO.last)); UFO.last = time;
+  if (UFO.t < 0) { // waiting for him to be up on a roof, then for the saucer to turn up
+    if (state !== 'play' || !onRoof(player)) { UFO.wait = -1; return; }
+    if (UFO.wait < 0) UFO.wait = UFO.seen ? 3 + Math.random() * 8 : 0.8 + Math.random() * 1.2;
+    if ((UFO.wait -= dt) > 0 || time < UFO.cd) return;
+    UFO.t = 0; UFO.dir = Math.random() < 0.5 ? 1 : -1; UFO.y0 = 34 + Math.random() * 40;
+  }
+  UFO.t += dt; const t = UFO.t, d = UFO.dir, x0 = d > 0 ? -12 : PW + 12, top = hy - 222, blink = Math.floor(time * 8);
+  let x, y, beam = 0, trail = 0;
+  if (t < 3.0) { x = x0 + d * 92 * t; y = UFO.y0 + Math.sin(t * 3) * 2; }                                             // drifting across
+  else if (t < 4.2) { const k = Math.min(1, (t - 3.0) / 0.3); x = x0 + d * (276 + 14 * k); y = UFO.y0 + Math.sin(t * 6) * 1;   // stops to hover
+    beam = t > 3.25 && t < 4.0 ? Math.min(1, (t - 3.25) / 0.15, (4.0 - t) / 0.15) : 0; }
+  else if (t < 4.9) { const k = (t - 4.2) / 0.7; x = x0 + d * (290 + 760 * k * k); y = UFO.y0 - 46 * k * k; trail = 1; }  // and it's gone
+  else { UFO.t = -1; UFO.wait = -1; UFO.seen = true; UFO.cd = time + 25; return; }
+  y += top;
+  if (beam) { // a pale cone of light down toward the far desert, in dither
+    for (let r = 0; r < 26; r++) { const w = 3 + Math.round(r * 0.45); dith(ctx, Math.round(x) - w, Math.round(y) + 3 + r, w * 2 + 1, 1, '#C8FFF4', 0.35 * beam * (1 - r / 30)); } }
+  if (trail) for (let i = 1; i <= 3; i++) { ctx.globalAlpha = 0.25 / i; drawSaucer(x - d * i * 9, y + i * 0.6, blink); ctx.globalAlpha = 1; }
+  glow(ctx, Math.round(x), Math.round(y), 8, '150,240,255', beam ? 0.22 : 0.1);
+  drawSaucer(x, y, blink);
+}
+
 // ---------- HUD ----------
 // One dark strip across the top: portrait, name + hearts, revolver, shotgun on the left; cash on the right.
 const HERO_NAME = 'JACK ROURKE';
@@ -3687,7 +3728,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 // test hook for automated playtesting
-window.__dl = { get state() { return state; }, get player() { return player; }, get enemies() { return enemies; }, get cam() { return camX; }, get bullets() { return bullets; }, get stats() { return stats; }, get pickups() { return pickups; }, get chests() { return chests; }, get hooks() { return hooks; }, get ladders() { return ladders; }, get LV() { return LV; },
+window.__dl = { get state() { return state; }, get player() { return player; }, get enemies() { return enemies; }, get cam() { return camX; }, get bullets() { return bullets; }, get stats() { return stats; }, get pickups() { return pickups; }, get oneways() { return oneways; }, get chests() { return chests; }, get hooks() { return hooks; }, get ladders() { return ladders; }, get LV() { return LV; },
   teleport(x) { player.x = x; player.y = GY - 200; player.vy = 0; },
   view(x, y) { camX = x; camY = y === undefined ? CAM_BOT : y; }, clear() { enemies = []; bullets = []; }, get pcv() { return pcv; }, hurt(e, n) { damageEnemy(e, n, e.x + e.w / 2, e.y + 30, false, true); }, get camY() { return camY; },
   step(n = 1) { for (let i = 0; i < n; i++) { update(1 / 60); render(); for (const k in pressed) delete pressed[k]; mouse.clicked = false; } } }; // advance frames by hand (a hidden tab pauses requestAnimationFrame)

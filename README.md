@@ -42,6 +42,7 @@ Two keyboard layouts work at the same time, one for each hand. The controller is
 
 At a ladder, W and ↑ climb instead of jumping. A left click also fires the revolver.
 
+- **Look up:** stand on a rooftop for a moment and you might catch something in the sky over the mesas. It comes by again now and then, but it makes you wait.
 - **Idle routines:** stand still for a few seconds and Jack puts on the same show as the cowboy on the title screen, one after another: he draws the revolver, twirls it and spins it home; pulls the shotgun off his back, breaks it, loads two shells from his belt and slings it again; draws the knife, wipes the blade with a rag, turns it to the light, flips it and sheathes it. Any input ends it at once.
 - **Reloading:** Jack loads the way the Crowe Boys do: a filling ring of six rounds (or two shells for the shotgun) and "RELOADING" over his head. He holds the revolver low and watches it, and keeps his feet.
 - **Ducking** is about timing. Duck when an outlaw's gun flashes and his shot sails over you. Stay down, though, and he adjusts his aim low after a moment (quickest for Silas). Riflemen above you always aim at your body.
