@@ -143,8 +143,8 @@ function readInput() {
   const pl = pad.lx < -0.4 || padDown(14), pr = pad.lx > 0.4 || padDown(15), pd = pad.ly > 0.55 || padDown(13);
   inp = {
     left: keys.a || keys.arrowleft || pl, right: keys.d || keys.arrowright || pr, down: keys.s || keys.arrowdown || pd,
-    jumpHeld: keys[' '] || keys.shiftright || padDown(0),
-    jump: pressed[' '] || pressed.shiftright || padHit(0),
+    jumpHeld: keys[' '] || keys.w || keys.arrowup || keys.shiftright || padDown(0),
+    jump: pressed[' '] || pressed.w || pressed.arrowup || pressed.shiftright || padHit(0),
     jumpBtn: pressed[' '] || pressed.shiftright || padHit(0), upPress: pressed.w || pressed.arrowup,      // W / up climbs when you're at a ladder
     up: keys.w || keys.arrowup || padDown(12) || pad.ly < -0.55,
     lasso: pressed.c || padHit(5),                          // R1
@@ -392,7 +392,7 @@ function buildDryCreek() {
   for (let x = 120; x < LW; x += 380) if (!((x > 1700 && x < 5300) || (x > 1460 && x < 1660))) poles.push(x);
   [[-400, 1480], [1640, 5300], [5420, LW + 400]].forEach(([a, b]) => S(a, GY, b - a, 400, 'ground'));
   // Outskirts
-  signs.push({ x: 150, text: () => pad.gp ? ['Stick to walk  ·  Down to duck', 'Cross to jump'] : ['WASD or arrows to move', 'Space or Right Shift to jump'] });
+  signs.push({ x: 150, text: () => pad.gp ? ['Stick to walk  ·  Down to duck', 'Cross to jump'] : ['WASD or arrows to move', 'Space, W or Up to jump'] });
   S(430, GY - 36, 90, 36, 'rock');
   signs.push({ x: 610, text: () => [settings.aim === 'mouse'
     ? (pad.gp && aimSrc === 'pad' ? 'Right stick aims  ·  R2 or Circle shoots  ·  L1 reloads' : 'Mouse aims  ·  click to shoot  ·  R reload')
@@ -595,7 +595,7 @@ function updatePlayer(dt, rdt) {
   if (p.climb) climbLadder(p, dt, want);
   else if (p.swing) swingRope(p, dt, want);
   else {
-    const jumpPressed = inp.jumpBtn, downHeld = inp.down;                     // W / up only climb ladders now; Space or Right Shift jumps
+    const jumpPressed = inp.jumpBtn || (inp.upPress && !lad), downHeld = inp.down;
     // down + jump drops through a plank or awning; down alone ducks
     if (jumpPressed) { if (downHeld && p.onGround && onOneway(p)) p.drop = 0.25; else p.jumpBuf = 0.13; }
     setCrouch(p, downHeld && p.onGround && p.drop <= 0 && p.jumpBuf <= 0);
@@ -3104,7 +3104,7 @@ function bigText(str, x, y, k, ramp) { const c = logoText(str, k, ramp); ctx.dra
 // ---------- overlays ----------
 // the controls: each action with its keyboard keys and its PS5 buttons, drawn as the buttons themselves
 const CONTROLS = [   // action, the left-hand keys, the right-hand keys, the controller
-  [['MOVE', 'k:W k:A k:S k:D', 'ar:u ar:l ar:d ar:r', 'st /dp:lr'], ['JUMP', 'k:SPACE', 'k:RIGHT_SHIFT', 'b:cross'], ['DUCK', 'k:S', 'ar:d', 'dp:down'], ['INTERACT', 'k:E', 'k:ENTER', 'b:triangle'], ['PAUSE', 'k:ESC /k:P', '', 'opt']],
+  [['MOVE', 'k:W k:A k:S k:D', 'ar:u ar:l ar:d ar:r', 'st /dp:lr'], ['JUMP', 'k:SPACE /k:W', 'ar:u /k:R_SHIFT', 'b:cross'], ['DUCK', 'k:S', 'ar:d', 'dp:down'], ['INTERACT', 'k:E', 'k:ENTER', 'b:triangle'], ['PAUSE', 'k:ESC /k:P', '', 'opt']],
   [['REVOLVER', 'k:1', 'k:J', 'sh:R2 /b:circle'], ['SHOTGUN', 'k:2', 'k:K', 'b:square'], ['KNIFE', 'k:3', 'k:L', 'b:triangle'], ['RELOAD', 'k:R', 'k:;', 'sh:L1'], ['MUSIC', 'k:M', '', 'cr']]];
 // one button, centred on y; returns its width
 function drawButton(x, y, tok) {

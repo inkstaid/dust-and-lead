@@ -29,7 +29,7 @@ Two keyboard layouts work at the same time, one for each hand. The controller is
 | Action | Left hand | Right hand | PS5 controller |
 |---|---|---|---|
 | Move | W A S D | ↑ ← ↓ → | Left stick or D-pad |
-| Jump | Space | Right Shift | Cross |
+| Jump | Space or W | ↑ or Right Shift | Cross |
 | Duck | S | ↓ | Left stick down or D-pad down |
 | Drop through a plank or awning | S + Space | ↓ + Right Shift | Down + Cross |
 | Interact (open a chest) | E | Enter | Triangle |
@@ -40,7 +40,7 @@ Two keyboard layouts work at the same time, one for each hand. The controller is
 | Pause | Esc or P | Esc or P | Options |
 | Music on/off | M | M | Create |
 
-W and ↑ climb ladders; they don't jump. A left click also fires the revolver.
+At a ladder, W and ↑ climb instead of jumping. A left click also fires the revolver.
 
 - **Idle routines:** stand still for a few seconds and Jack puts on the same show as the cowboy on the title screen, one after another: he draws the revolver, twirls it and spins it home; pulls the shotgun off his back, breaks it, loads two shells from his belt and slings it again; draws the knife, wipes the blade with a rag, turns it to the light, flips it and sheathes it. Any input ends it at once.
 - **Reloading:** Jack loads the way the Crowe Boys do: a filling ring of six rounds (or two shells for the shotgun) and "RELOADING" over his head. He holds the revolver low and watches it, and keeps his feet.
