@@ -97,10 +97,11 @@ const mouse = { x: W / 2, y: H / 2, down: false, clicked: false };
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (!keys[k]) pressed[k] = true; keys[k] = true;
+  if (e.code === 'ShiftRight') { if (!keys.shiftright) pressed.shiftright = true; keys.shiftright = true; }   // the right Shift jumps; the left one doesn't
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
   initAudio();
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.code === 'ShiftRight') keys.shiftright = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.down = false; if (state === 'play') state = 'pause'; });
 function toLogical(e) { const r = cvs.getBoundingClientRect(); mouse.x = (e.clientX - r.left) / r.width * W; mouse.y = (e.clientY - r.top) / r.height * H; }
 cvs.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { toLogical(e); aimSrc = 'mouse'; } });
@@ -142,20 +143,20 @@ function readInput() {
   const pl = pad.lx < -0.4 || padDown(14), pr = pad.lx > 0.4 || padDown(15), pd = pad.ly > 0.55 || padDown(13);
   inp = {
     left: keys.a || keys.arrowleft || pl, right: keys.d || keys.arrowright || pr, down: keys.s || keys.arrowdown || pd,
-    jumpHeld: keys[' '] || keys.w || keys.arrowup || padDown(0),
-    jump: pressed[' '] || pressed.w || pressed.arrowup || padHit(0),
-    jumpBtn: pressed[' '] || padHit(0), upPress: pressed.w || pressed.arrowup,      // W / up climbs when you're at a ladder
+    jumpHeld: keys[' '] || keys.shiftright || padDown(0),
+    jump: pressed[' '] || pressed.shiftright || padHit(0),
+    jumpBtn: pressed[' '] || pressed.shiftright || padHit(0), upPress: pressed.w || pressed.arrowup,      // W / up climbs when you're at a ladder
     up: keys.w || keys.arrowup || padDown(12) || pad.ly < -0.55,
     lasso: pressed.c || padHit(5),                          // R1
-    knife: pressed.z || padHit(3),                          // Triangle
-    shotgun: pressed.v || padHit(2),                        // Square
-    fire: pressed.x || mouse.clicked || padHit(7) || padHit(1), // R2 or Circle
-    music: pressed.n || padHit(8),                          // Create
-    reload: pressed.r || padHit(4),
-    use: pressed.e,                                         // open a chest (Triangle / Z also work)
+    knife: pressed['3'] || pressed.l || padHit(3),          // Triangle
+    shotgun: pressed['2'] || pressed.k || padHit(2),        // Square
+    fire: pressed['1'] || pressed.j || mouse.clicked || padHit(7) || padHit(1), // R2 or Circle
+    music: pressed.m || padHit(8),                          // Create
+    reload: pressed.r || pressed[';'] || padHit(4),         // L1
+    use: pressed.e || pressed.enter,                        // open a chest (the knife opens them too)
     pause: pressed.p || pressed.escape || padHit(9),
     confirm: mouse.clicked || pressed[' '] || pressed.enter || padHit(0) || padHit(9),
-    toggle: pressed.m || pressed.arrowleft || pressed.arrowright || padHit(14) || padHit(15)
+    toggle: false
   };
 }
 
@@ -391,14 +392,14 @@ function buildDryCreek() {
   for (let x = 120; x < LW; x += 380) if (!((x > 1700 && x < 5300) || (x > 1460 && x < 1660))) poles.push(x);
   [[-400, 1480], [1640, 5300], [5420, LW + 400]].forEach(([a, b]) => S(a, GY, b - a, 400, 'ground'));
   // Outskirts
-  signs.push({ x: 150, text: () => pad.gp ? ['Stick to walk  ·  Down to duck', 'Cross to jump'] : ['A / D to walk  ·  S to duck', 'Space to jump'] });
+  signs.push({ x: 150, text: () => pad.gp ? ['Stick to walk  ·  Down to duck', 'Cross to jump'] : ['WASD or arrows to move', 'Space or Right Shift to jump'] });
   S(430, GY - 36, 90, 36, 'rock');
   signs.push({ x: 610, text: () => [settings.aim === 'mouse'
     ? (pad.gp && aimSrc === 'pad' ? 'Right stick aims  ·  R2 or Circle shoots  ·  L1 reloads' : 'Mouse aims  ·  click to shoot  ·  R reload')
-    : (pad.gp ? 'R2 or Circle shoots the way you face  ·  L1 reloads' : 'X to shoot the way you face  ·  R reload'),
-    pad.gp ? 'Triangle stabs with the knife  ·  Square fires the shotgun' : 'Z stabs with the knife  ·  V fires the shotgun'] });
+    : (pad.gp ? 'R2 or Circle shoots the way you face  ·  L1 reloads' : '1 or J shoots the way you face  ·  R or ; reloads'),
+    pad.gp ? 'Triangle stabs with the knife  ·  Square fires the shotgun' : '3 or L stabs with the knife  ·  2 or K fires the shotgun'] });
   S(790, GY - 64, 70, 64, 'rock');
-  signs.push({ x: 1090, text: () => pad.gp ? 'Triangle opens chests' : 'E or Z opens chests' });
+  signs.push({ x: 1090, text: () => pad.gp ? 'Triangle opens chests' : 'E or Enter opens chests' });
   crate(1320, 1); crate(1370, 2);
   plank(1530, GY - 14, 60);
   [60, 330, 690, 960, 1190, 1440, 5360, 5590, 7260].forEach((x, i) => decor.push({ kind: 'cactus', x, s: 0.8 + (i % 3) * 0.2 }));
@@ -594,7 +595,7 @@ function updatePlayer(dt, rdt) {
   if (p.climb) climbLadder(p, dt, want);
   else if (p.swing) swingRope(p, dt, want);
   else {
-    const jumpPressed = inp.jumpBtn || (inp.upPress && !lad), downHeld = inp.down;
+    const jumpPressed = inp.jumpBtn, downHeld = inp.down;                     // W / up only climb ladders now; Space or Right Shift jumps
     // down + jump drops through a plank or awning; down alone ducks
     if (jumpPressed) { if (downHeld && p.onGround && onOneway(p)) p.drop = 0.25; else p.jumpBuf = 0.13; }
     setCrouch(p, downHeld && p.onGround && p.drop <= 0 && p.jumpBuf <= 0);
@@ -3102,15 +3103,22 @@ function bigText(str, x, y, k, ramp) { const c = logoText(str, k, ramp); ctx.dra
 
 // ---------- overlays ----------
 // the controls: each action with its keyboard keys and its PS5 buttons, drawn as the buttons themselves
-const CONTROLS = [
-  [['MOVE', 'k:A /k:D', 'st /dp:lr'], ['JUMP', 'k:SPACE', 'b:cross'], ['DUCK', 'k:S', 'dp:down'], ['DROP DOWN', 'k:S +k:SPACE', 'dp:down +b:cross'], ['OPEN CHEST', 'k:E', 'b:triangle']],
-  [['REVOLVER', 'k:X', 'sh:R2 /b:circle'], ['SHOTGUN', 'k:V', 'b:square'], ['KNIFE', 'k:Z', 'b:triangle'], ['RELOAD', 'k:R', 'sh:L1'], ['PAUSE', 'k:P', 'opt'], ['MUSIC', 'k:N', 'cr']]];
+const CONTROLS = [   // action, the left-hand keys, the right-hand keys, the controller
+  [['MOVE', 'k:W k:A k:S k:D', 'ar:u ar:l ar:d ar:r', 'st /dp:lr'], ['JUMP', 'k:SPACE', 'k:RIGHT_SHIFT', 'b:cross'], ['DUCK', 'k:S', 'ar:d', 'dp:down'], ['INTERACT', 'k:E', 'k:ENTER', 'b:triangle'], ['PAUSE', 'k:ESC /k:P', '', 'opt']],
+  [['REVOLVER', 'k:1', 'k:J', 'sh:R2 /b:circle'], ['SHOTGUN', 'k:2', 'k:K', 'b:square'], ['KNIFE', 'k:3', 'k:L', 'b:triangle'], ['RELOAD', 'k:R', 'k:;', 'sh:L1'], ['MUSIC', 'k:M', '', 'cr']]];
 // one button, centred on y; returns its width
 function drawButton(x, y, tok) {
   if (tok.startsWith('k:')) { // a keycap: pale face, a darker lip at the bottom, the letter in ink
-    const lbl = tok.slice(2), w = Math.max(13, measure(lbl) + 8);
+    const lbl = tok.slice(2).replace(/_/g, ' '), w = Math.max(13, measure(lbl) + 8);   // '_' stands for a space inside a key's name
     Rc(ctx, x, y - 7, w, 14, INK); Rc(ctx, x + 1, y - 6, w - 2, 12, '#9C8A70'); Rc(ctx, x + 1, y - 6, w - 2, 10, '#EAD9B8'); Rc(ctx, x + 1, y - 6, w - 2, 1, '#FFF6E2');
     text(ctx, lbl, x + w / 2, y - 5, { align: 'center', col: INK }); return w; }
+  if (tok.startsWith('ar:')) { // an arrow key: a keycap with a little arrowhead
+    const d = tok.slice(3), cx = x + 6, cy = y - 1;
+    Rc(ctx, x, y - 7, 13, 14, INK); Rc(ctx, x + 1, y - 6, 11, 12, '#9C8A70'); Rc(ctx, x + 1, y - 6, 11, 10, '#EAD9B8'); Rc(ctx, x + 1, y - 6, 11, 1, '#FFF6E2');
+    for (let i = 0; i < 3; i++) { const w = i * 2 + 1;   // three rows of a solid arrowhead
+      if (d === 'u') Rc(ctx, cx - i, cy - 2 + i, w, 1, INK); else if (d === 'd') Rc(ctx, cx - i, cy + 2 - i, w, 1, INK);
+      else if (d === 'l') Rc(ctx, cx - 2 + i, cy - i, 1, w, INK); else Rc(ctx, cx + 2 - i, cy - i, 1, w, INK); }
+    return 13; }
   if (tok.startsWith('b:')) { // a face button: dark disc, the symbol in its colour
     const k = tok.slice(2), cx = x + 6, col = { cross: '#86B8F4', circle: '#F07474', square: '#EA90CC', triangle: '#66DAAE' }[k];
     ctx.fillStyle = INK; disc(ctx, cx, y, 7); ctx.fillStyle = '#8A8294'; disc(ctx, cx, y, 6); ctx.fillStyle = '#4A4254'; disc(ctx, cx, y + 1, 5);
@@ -3158,20 +3166,21 @@ function framePanel(x, y, w, h) { // a dark panel with a thin gold rule inside a
   Rc(ctx, x + 2, y + 2, 1, h - 4, 'rgba(244,200,90,0.2)'); Rc(ctx, x + w - 3, y + 2, 1, h - 4, 'rgba(244,200,90,0.2)');
 }
 function drawPause() {
-  shade(0.5); const px = PW / 2 - 236, py = 40, pw = 472, ph = 282; framePanel(px, py, pw, ph);
+  shade(0.5); const px = PW / 2 - 304, py = 56, pw = 608, ph = 292; framePanel(px, py, pw, ph);
   bigText('PAUSED', PW / 2, py + 10, 2, PAPER);
-  const cw = measure('or') + 4, lw = drawButtonsWidth('k:P') + cw + drawButtonsWidth('opt') + 6 + measure('to carry on'); let x = Math.round(PW / 2 - lw / 2);   // the buttons to carry on, centred
-  x = drawButtons(x, py + 48, 'k:P'); text(ctx, 'or', x, py + 45, { col: '#F4C85A' }); x += cw; x = drawButtons(x, py + 48, 'opt'); text(ctx, 'to carry on', x + 3, py + 45, { col: '#F4C85A' });
+  const cw = measure('or') + 4, lw = drawButtonsWidth('k:ESC /k:P') + cw + drawButtonsWidth('opt') + 6 + measure('to carry on'); let x = Math.round(PW / 2 - lw / 2);   // the buttons to carry on, centred
+  x = drawButtons(x, py + 48, 'k:ESC /k:P'); text(ctx, 'or', x, py + 45, { col: '#F4C85A' }); x += cw; x = drawButtons(x, py + 48, 'opt'); text(ctx, 'to carry on', x + 3, py + 45, { col: '#F4C85A' });
   Rc(ctx, px + 20, py + 62, pw - 40, 1, 'rgba(234,217,184,0.15)');
-  CONTROLS.forEach((col, c) => { const x0 = px + 22 + c * 228;
-    text(ctx, 'KEYBOARD', x0 + 84, py + 70, { col: 'rgba(234,217,184,0.45)' }); text(ctx, 'CONTROLLER', x0 + 150, py + 70, { col: 'rgba(234,217,184,0.45)' });
-    col.forEach(([lbl, keys, padB], r) => { const y = py + 90 + r * 18;
-      text(ctx, lbl, x0, y - 3, { col: '#EAD9B8' }); drawButtons(x0 + 84, y, keys); drawButtons(x0 + 150, y, padB);
-      Rc(ctx, x0, y + 9, 214, 1, 'rgba(234,217,184,0.06)'); }); });
-  Rc(ctx, px + 20, py + 204, pw - 40, 1, 'rgba(234,217,184,0.15)');
-  text(ctx, 'TIPS', px + 24, py + 212, { col: 'rgba(234,217,184,0.55)' });
-  ['Duck just as a gun flashes and the shot flies over you.', 'Outlaws reload after a few shots. That is your moment.', 'Light a lantern and you come back there, with your ammo.']
-    .forEach((l, i) => text(ctx, l, px + 24, py + 226 + i * 14, { col: '#EAD9B8' }));
+  const head = 'rgba(234,217,184,0.45)';
+  CONTROLS.forEach((col, c) => { const x0 = px + 20 + c * 290;   // action | left hand | right hand | controller
+    text(ctx, 'LEFT HAND', x0 + 62, py + 70, { col: head }); text(ctx, 'RIGHT HAND', x0 + 130, py + 70, { col: head }); text(ctx, 'CONTROLLER', x0 + 206, py + 70, { col: head });
+    col.forEach(([lbl, keysL, keysR, padB], r) => { const y = py + 92 + r * 20;
+      text(ctx, lbl, x0, y - 3, { col: '#EAD9B8' }); drawButtons(x0 + 62, y, keysL); if (keysR) drawButtons(x0 + 130, y, keysR); drawButtons(x0 + 206, y, padB);
+      Rc(ctx, x0, y + 10, 276, 1, 'rgba(234,217,184,0.06)'); }); });
+  Rc(ctx, px + 20, py + 200, pw - 40, 1, 'rgba(234,217,184,0.15)');
+  text(ctx, 'TIPS', px + 24, py + 208, { col: 'rgba(234,217,184,0.55)' });
+  ['Duck just as a gun flashes and the shot flies over you.', 'Duck and jump together to drop down through a ledge.', 'Outlaws reload after a few shots. That is your moment.', 'Light a lantern and you come back there, with your ammo.']
+    .forEach((l, i) => text(ctx, l, px + 24, py + 222 + i * 14, { col: '#EAD9B8' }));
 }
 function drawButtonsWidth(spec) { const saved = ctx; ctx = { fillRect() {}, drawImage() {}, set fillStyle(v) {}, get fillStyle() { return ''; } }; let w = 0; try { w = drawButtons(0, 0, spec); } finally { ctx = saved; } return w; }
 function drawDead() {
