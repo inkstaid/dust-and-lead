@@ -2208,7 +2208,6 @@ function drawBackground(cx, cy) {
   const skyY = hy - SKY_HOR; if (skyY > 0) Rc(ctx, 0, 0, PW, skyY, '#244256');
   ctx.drawImage(B.sky, -Math.round(cx * 0.02) % 170, skyY);
   tiled(B.cloud, -(cx * 0.03 + time * 1.5), hy - 250 + Math.round(dv * 0.1));
-  drawUfo(hy);                                                                         // now and then, when you're up on a roof
   // rocks left of the sun are lit from the right, rocks right of it from the left
   const sunX = SUN.x - (Math.round(cx * 0.02) % 170), split = (pair, x, y) => {
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, sunX, PH); ctx.clip(); tiled(pair[0], x, y); ctx.restore();
@@ -2216,6 +2215,7 @@ function drawBackground(cx, cy) {
   split(B.far, -cx * 0.05, hy + 6 - B.far[0].height);
   tiled(B.plain, -cx * 0.12, hy);
   split(B.mid, -cx * 0.12, hy + 18 - B.mid[0].height);
+  drawUfo(hy);                                                                         // now and then, when you're up on a roof: out over the desert
   drawMidground(cx, hy + 34 + Math.round(dv * 0.1));
   drawOutcrops(cx, hy + 62 + Math.round(dv * 0.3));
 }
@@ -2976,22 +2976,63 @@ function drawExtras(cx) {
     Rc(ctx, x, GY - 2, 1, 1, '#E0D8C8'); Rc(ctx, x, GY - 1, 1, 1, '#8A8898'); Rc(ctx, x, GY, 1, 1, '#3C3844'); }
 }
 
-// ---------- an easter egg: a flying saucer, far off over the mesas ----------
-// Climb onto a roof and, every so often, a little saucer drifts across the evening sky behind the mesas, stops to hover
-// and shine a light down on the desert, then zips away. The first time you're up on a roof it comes soon; after that it
-// keeps you waiting. Drawn in the sky layer, so the far mesas pass in front of it.
-const UFO = { t: -1, wait: -1, cd: 0, seen: false, last: 0, dir: 1, y0: 0 };
-const UFO_ROWS = ['....ccc....', '...cCCcc...', '.kmMMMMMmk.', 'kmmmmmmmmmk', '.kLkLkLkLk.', '...kkkkk...'];
-const UFO_PAL = { c: '#6EC8D4', C: '#D8FAFF', M: '#C8CCD8', m: '#8A90A0', k: '#2A2C38' }, UFO_LIGHTS = ['#FF5A5A', '#FFE26A', '#7AF0A0'];
+// ---------- an easter egg: a flying saucer out over the desert, taking a cow ----------
+// Climb onto a roof and, every so often, a saucer glides in over the far desert, stops above a cow grazing out there,
+// switches on its tractor beam and lifts the cow, tumbling, up into the ship. Then it zips away. The first time you're up
+// on a roof it comes soon; after that it keeps you waiting. It flies between the far and near mesas, and the town and
+// the near rocks pass in front of it, so the cow often rises into view from behind the rooftops.
+const UFO = { t: -1, wait: -1, cd: 0, seen: false, last: 0, dir: 1, hx: 320 };
+const UFO_T = { arrive: 2.4, beam: 2.7, lift: 3.2, aboard: 6.2, off: 6.6, zip: 7.1, end: 7.8 };
+const UFO_CV = {};
 function onRoof(p) {
   if (!p || !p.onGround) return false; const fy = p.y + p.h;
   for (const o of oneways) if (o.kind === 'roof' && Math.abs(fy - o.y) < 2 && p.x + p.w > o.x && p.x < o.x + o.w) return true;
   return false;
 }
-function drawSaucer(x, y, blink) {
-  x = Math.round(x); y = Math.round(y); let li = 0;
-  UFO_ROWS.forEach((row, r) => { for (let i = 0; i < row.length; i++) { const ch = row[i]; if (ch === '.') continue;
-    Rc(ctx, x + i - 5, y + r - 3, 1, 1, ch === 'L' ? UFO_LIGHTS[(li++ + blink) % 3] : UFO_PAL[ch]); } });
+function saucerSprite(beam, phase) { // 57 x 22: a green glass dome, a dark hull lit along its top, a band of chasing lights, the emitter
+  const key = (beam ? 'b' : 'n') + phase; if (UFO_CV[key]) return UFO_CV[key];
+  const W = 57, H = 22, cx = 28, cy = 12;
+  const dome = (x, y) => { const dx = x - cx, dy = y - cy; return dy <= -2 && (dx * dx) / 100 + ((dy + 4) ** 2) / 64 <= 1; };
+  const hull = (x, y) => { const dx = x - cx, dy = y - cy; return (dx * dx) / 729 + (dy * dy) / 18 <= 1; };
+  const belly = (x, y) => { const dx = x - cx, dy = y - cy; return (dx * dx) / 144 + ((dy - 3.5) ** 2) / 7 <= 1; };
+  const solid = (x, y) => dome(x, y) || hull(x, y) || belly(x, y);
+  const col = (x, y) => {
+    const dx = x - cx, dy = y - cy;
+    if (!solid(x, y)) return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => solid(x + i, y + j)) ? '#14141C' : null;   // outline
+    if (dome(x, y)) { if ([[1, 0], [-1, 0], [0, -1]].some(([i, j]) => !dome(x + i, y + j)) && dy < -2) return '#2E6A5C';
+      return dx < -3 && dy < -7 ? '#C8FFE8' : dx < -1 && dy < -5 ? '#8CE4C4' : dx > 5 ? '#3E8E78' : '#5EBC9E'; }
+    if (hull(x, y)) { if (dy === 1 && Math.abs(dx) <= 21 && (dx + 21) % 6 < 2) { const n = Math.floor((dx + 21) / 6); return n % 4 === phase ? '#F4E6FF' : '#B494F0'; }   // the lights
+      if (dy === -3 && dx > -20 && dx < -6) return '#D4DAE6'; return dy < -1 ? '#9298AC' : dy < 1 ? '#6C7086' : '#3E4054'; }
+    if (Math.abs(dx) <= 3 && dy >= 5) return beam ? '#E4FFF6' : '#4A5266';   // the emitter
+    return dy > 4 ? '#24263A' : '#30324A';
+  };
+  return (UFO_CV[key] = pixCanvas(W, H, (x, y) => { const c = col(x, y); return c ? hexRGB(c) : null; }));
+}
+function cowReady() { // the cow, added to the title cowboy's item set so it turns the RotSprite way
+  if (T_ITEMS.cow) return;
+  Object.assign(T_PAL, { o: '#F4F0EA', O: '#C9C2CC', n: '#26222C', p: '#F2A2AE', y: '#E8D8B0', q: '#4A3E44' });
+  T_ITEMS.cow = { px: 10, py: 6, rows: ['...............y..y.', '..............kkkkk.', '..kkkkkkkkkkkkkoonok', '.koonnnoooonnokonook', 'kkonnnooooonoooooppk', 'k.oonooooOOOooOkpnpk',
+    '..OOOOOOOOOOOOk.kkk.', '..kOOOOOOOOOOk......', '..kkkkppkkkkkk......', '...OO.OO..OOOO......', '...oo.oo..oooo......', '...qq.qq..qqqq......'] };
+}
+function drawCow(x, y, a, alpha) { cowReady(); x = Math.round(x); y = Math.round(y); if (alpha < 1) ctx.globalAlpha = alpha;
+  for (const [dx, dy, c] of tRot('cow', a)) Rc(ctx, x + dx, y + dy, 1, 1, c); ctx.globalAlpha = 1; }
+function drawBeam(x, top, bot, k, t) { // a pale green column, wider at the foot, with bright edges and bands rising through it
+  const len = Math.round((bot - top) * k); if (len <= 0) return;
+  for (let r = 0; r < len; r++) { const y = top + r, w = Math.round(12 + r * 0.1);
+    ctx.globalAlpha = 0.24; Rc(ctx, x - w, y, w * 2 + 1, 1, '#B8FFE8');
+    if (((r + Math.floor(t * 40)) % 10) < 2) { ctx.globalAlpha = 0.16; Rc(ctx, x - w + 2, y, w * 2 - 3, 1, '#FFFFFF'); }
+    ctx.globalAlpha = 0.6; Rc(ctx, x - w, y, 1, 1, '#E8FFF8'); Rc(ctx, x + w, y, 1, 1, '#E8FFF8'); }
+  if (k >= 1) { const w = Math.round(12 + len * 0.1) + 3; ctx.globalAlpha = 0.35; Rc(ctx, x - w, bot - 1, w * 2 + 1, 2, '#D8FFF0'); }   // where it lights the ground
+  ctx.globalAlpha = 1;
+}
+function ufoSpot() { // somewhere over open desert: away from Jack, and with no building in front, so the whole abduction shows
+  const cx = Math.round(camX), px = player.x + player.w / 2 - cx, open = [];
+  for (let x = 60; x <= PW - 60; x += 8) {
+    if (Math.abs(x - px) < 110) continue;
+    if (buildings.some(b => b.x - cx < x + 20 && b.x + b.w - cx > x - 20)) continue;
+    open.push(x); }
+  if (open.length) return open[Math.floor(Math.random() * open.length)];
+  return px < PW / 2 ? PW - 120 : 120;   // nowhere clear: as far from him as it can
 }
 function drawUfo(hy) {
   const dt = Math.min(0.05, Math.max(0, time - UFO.last)); UFO.last = time;
@@ -2999,21 +3040,27 @@ function drawUfo(hy) {
     if (state !== 'play' || !onRoof(player)) { UFO.wait = -1; return; }
     if (UFO.wait < 0) UFO.wait = UFO.seen ? 3 + Math.random() * 8 : 0.8 + Math.random() * 1.2;
     if ((UFO.wait -= dt) > 0 || time < UFO.cd) return;
-    UFO.t = 0; UFO.dir = Math.random() < 0.5 ? 1 : -1; UFO.y0 = 34 + Math.random() * 40;
+    UFO.t = 0; UFO.dir = Math.random() < 0.5 ? 1 : -1; UFO.hx = ufoSpot();
   }
-  UFO.t += dt; const t = UFO.t, d = UFO.dir, x0 = d > 0 ? -12 : PW + 12, top = hy - 222, blink = Math.floor(time * 8);
-  let x, y, beam = 0, trail = 0;
-  if (t < 3.0) { x = x0 + d * 92 * t; y = UFO.y0 + Math.sin(t * 3) * 2; }                                             // drifting across
-  else if (t < 4.2) { const k = Math.min(1, (t - 3.0) / 0.3); x = x0 + d * (276 + 14 * k); y = UFO.y0 + Math.sin(t * 6) * 1;   // stops to hover
-    beam = t > 3.25 && t < 4.0 ? Math.min(1, (t - 3.25) / 0.15, (4.0 - t) / 0.15) : 0; }
-  else if (t < 4.9) { const k = (t - 4.2) / 0.7; x = x0 + d * (290 + 760 * k * k); y = UFO.y0 - 46 * k * k; trail = 1; }  // and it's gone
-  else { UFO.t = -1; UFO.wait = -1; UFO.seen = true; UFO.cd = time + 25; return; }
-  y += top;
-  if (beam) { // a pale cone of light down toward the far desert, in dither
-    for (let r = 0; r < 26; r++) { const w = 3 + Math.round(r * 0.45); dith(ctx, Math.round(x) - w, Math.round(y) + 3 + r, w * 2 + 1, 1, '#C8FFF4', 0.35 * beam * (1 - r / 30)); } }
-  if (trail) for (let i = 1; i <= 3; i++) { ctx.globalAlpha = 0.25 / i; drawSaucer(x - d * i * 9, y + i * 0.6, blink); ctx.globalAlpha = 1; }
-  glow(ctx, Math.round(x), Math.round(y), 8, '150,240,255', beam ? 0.22 : 0.1);
-  drawSaucer(x, y, blink);
+  UFO.t += dt; const t = UFO.t, T = UFO_T, d = UFO.dir;
+  if (t > T.end) { UFO.t = -1; UFO.wait = -1; UFO.seen = true; UFO.cd = time + 25; return; }
+  const ground = hy + 16, hoverY = hy - 132, x0 = d > 0 ? -40 : PW + 40, hx = UFO.hx;
+  let x, y, trail = 0;
+  if (t < T.arrive) { const k = t / T.arrive, e = 1 - (1 - k) * (1 - k); x = x0 + (hx - x0) * e; y = hoverY - 30 * (1 - e) + Math.sin(t * 3) * 2; }   // glides in, settling
+  else if (t < T.zip) { x = hx + (t > T.aboard ? Math.sin(t * 30) * (T.zip - t) * 2 : 0); y = hoverY + Math.sin(t * 2.4) * 1.5; }                 // hovers; a happy wobble once the cow's aboard
+  else { const k = (t - T.zip) / (T.end - T.zip); x = hx + d * 900 * k * k; y = hoverY - 70 * k * k; trail = 1; }                                  // and it's gone
+  // the cow: grazing out there, then lifted, kicking, tumbling slowly up into the ship
+  if (t < T.aboard) { let cx = hx, cy = ground - 6, a = 0;
+    if (t >= T.beam && t < T.lift) a = Math.sin(t * 22) * 0.12;                                                 // startled
+    if (t >= T.lift) { const k = (t - T.lift) / (T.aboard - T.lift), e = k * k * (3 - 2 * k); cy = ground - 6 + (y + 12 - ground) * e; cx = hx + Math.sin(t * 2.2) * 3 * (1 - k); a = -(t - T.lift) * 1.3 + Math.sin(t * 9) * 0.1; }
+    drawCow(cx, cy, a, t > T.aboard - 0.25 ? (T.aboard - t) / 0.25 : 1); }
+  const k = t < T.beam ? 0 : t < T.beam + 0.25 ? (t - T.beam) / 0.25 : t < T.aboard ? 1 : t < T.off ? 1 - (t - T.aboard) / (T.off - T.aboard) : 0;
+  if (k > 0) drawBeam(Math.round(x), Math.round(y) + 9, ground, k, t);
+  const phase = Math.floor(time * 10) % 4, cv = saucerSprite(k > 0, phase);
+  if (trail) for (let i = 1; i <= 3; i++) { ctx.globalAlpha = 0.3 / i; ctx.drawImage(cv, Math.round(x - d * i * 14) - 28, Math.round(y + i) - 12); ctx.globalAlpha = 1; }
+  glow(ctx, Math.round(x), Math.round(y) - 3, 18, '150,255,220', k > 0 ? 0.16 : 0.06);
+  ctx.drawImage(cv, Math.round(x) - 28, Math.round(y) - 12);
+  if (t > T.aboard - 0.05 && t < T.aboard + 0.12) glow(ctx, Math.round(x), Math.round(y) + 8, 10, '230,255,245', 0.5);   // the hatch closes on the cow
 }
 
 // ---------- HUD ----------
